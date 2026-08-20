@@ -1,11 +1,9 @@
 import csv
 import logging
 import os
-from io import StringIO
 
 import psycopg2
 import psycopg2.extras
-import pytest
 
 import pypostgres
 from pypostgres.pgutils import PGUtils
@@ -42,10 +40,10 @@ def test_connect():
 
 
 def test_connect_returns_custom_cursor():
-    conn = _getconnection()
-    cur = conn.cursor()
-    assert isinstance(cur, pypostgres.CustomCursor)
-    cur.close()
+    with _getconnection().cursor() as cur:
+        assert isinstance(cur, pypostgres.CustomCursor)
+
+
 
 
 def test_connect_custom_cursor_factory():
@@ -56,7 +54,6 @@ def test_connect_custom_cursor_factory():
     assert result == {"id": 1}
     cur.close()
     conn.close()
-
 
 def test_wait_callback_registered():
     assert psycopg2.extensions.get_wait_callback() is not None

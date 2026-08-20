@@ -1,13 +1,10 @@
 services:
   postgres:
-    image: postgres:16
+    image: postgres:18
     environment:
       POSTGRES_HOST_AUTH_METHOD: trust
       POSTGRES_USER: postgres
-      # POSTGRES_PASSWORD: asd
-      # POSTGRES_DB: postgres
-    ports:
-      - "5432:5432"
+    ports: ["5432:5432"]
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
