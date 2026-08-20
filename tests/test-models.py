@@ -117,13 +117,16 @@ def test_pgpartition_default_expression():
 
 
 def test_pgpartition_range_from_to_naive():
-    """Naive datetime parsing is broken: regex captures quotes but naive path doesn't strip them."""
+    """Naive datetime parsing should strip quotes and parse."""
     child = PGTable(name="events_202501", schema="public")
-    with pytest.raises(ValueError):
-        PGPartition(
-            pgtable=child,
-            expression="FOR VALUES FROM ('2025-01-01 00:00:00') TO ('2025-02-01 00:00:00')",
-        )
+    part = PGPartition(
+        pgtable=child,
+        expression="FOR VALUES FROM ('2025-01-01 00:00:00') TO ('2025-02-01 00:00:00')",
+    )
+    assert len(part.range) == 2
+    assert part.range[0] == datetime(2025, 1, 1)
+    assert part.range[1] == datetime(2025, 2, 1)
+    assert part.range[0].tzinfo is None
 
 
 def test_pgpartition_range_from_to_timezone():
@@ -146,6 +149,26 @@ def test_pgpartition_hash_modulus():
     assert len(part.range) == 2
     assert "MODULUS 16" in part.range[0]
     assert "REMAINDER 0" in part.range[1]
+
+
+def test_pgpartition_list_in():
+    child = PGTable(name="sales_emea", schema="public")
+    part = PGPartition(
+        pgtable=child,
+        expression="FOR VALUES IN ('EU', 'UK', 'DACH')",
+    )
+    assert part.range == ["EU", "UK", "DACH"]
+
+
+def test_pgpartition_range_multi_column():
+    child = PGTable(name="metrics_web01", schema="public")
+    part = PGPartition(
+        pgtable=child,
+        expression="FOR VALUES FROM ('web01', '2026-01-01 00:00:00') TO ('web01', '2027-01-01 00:00:00')",
+    )
+    assert len(part.range) == 2
+    assert part.range[0] == ["web01", "2026-01-01 00:00:00"]
+    assert part.range[1] == ["web01", "2027-01-01 00:00:00"]
 
 
 def test_pgpartition_empty_expression_is_inheritance():

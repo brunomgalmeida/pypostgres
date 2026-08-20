@@ -51,7 +51,9 @@ def test_connect_returns_custom_cursor():
 def test_connect_custom_cursor_factory():
     conn = pypostgres.connect(cursor_factory=psycopg2.extras.RealDictCursor)
     cur = conn.cursor()
-    result = cur.execute("SELECT 1 as id").fetchone() or cur.fetchone()
+    cur.execute("SELECT 1 as id")
+    result = cur.fetchone()
+    assert result == {"id": 1}
     cur.close()
     conn.close()
 

@@ -118,9 +118,9 @@ class PGUtils:
             on_commit: Action to take on commit (default: DELETE ROWS)
         """
         col_defs = sql.SQL(", ").join(
-            sql.SQL("{} {}").format(sql.Identifier(col), sql.Placeholder()) for col, dtype in columns.items()
+            sql.SQL("{} {}").format(sql.Identifier(col), sql.SQL(dtype)) for col, dtype in columns.items()
         )
         query = sql.SQL("CREATE TEMPORARY TABLE IF NOT EXISTS {} ({}) ON COMMIT {}").format(
             sql.Identifier(table_name), col_defs, sql.SQL(on_commit)
         )
-        self.cur.execute(query, list(columns.values()))
+        self.cur.execute(query)

@@ -125,8 +125,16 @@ class PGPartition:
                 self.range.append(match[1])
                 self.range.append(match[2])
 
+            elif "FOR VALUES IN" in self.expression:
+                # This regex will match: FOR VALUES IN ('EU', 'UK', 'DACH')
+                match = re.search(r"FOR VALUES IN\s*\((.*?)\)", self.expression)
+                if not match:
+                    raise ValueError("Invalid partition expression format: " + self.expression)
+                self.range = re.findall(r"'([^']*)'", match[1])
+
             elif "FOR VALUES FROM" in self.expression:
                 # This regex will match "FOR VALUES FROM ('2025-07-01 00:00:00+00') TO ('2025-07-02 00:00:00+00')"
+                # and multi-column keys like "FOR VALUES FROM ('web01', '2026-01-01') TO ('web01', '2027-01-01')"
                 match = re.search(r"FOR VALUES FROM\s*\((.*?)\)\s*TO\s*\((.*?)\)", self.expression)
                 if not match:
                     raise ValueError("Invalid partition expression format: " + self.expression)
@@ -134,7 +142,11 @@ class PGPartition:
                 start = match[1]
                 end = match[2]
 
-                if "+" in start:
+                # Multi-column partition key (comma-separated values)
+                if "," in start:
+                    self.range.append([v.strip().strip("'") for v in start.split(",")])
+                    self.range.append([v.strip().strip("'") for v in end.split(",")])
+                elif "+" in start:
                     start = (start.replace("'", "") + "00").replace("+", " +")
                     end = (end.replace("'", "") + "00").replace("+", " +")
                     # Handle timezone-aware datetime
@@ -142,8 +154,12 @@ class PGPartition:
                     self.range.append(datetime.strptime(end, "%Y-%m-%d %H:%M:%S %z"))
                 else:
                     # Handle naive datetime
-                    self.range.append(datetime.strptime(start, "%Y-%m-%d %H:%M:%S"))
-                    self.range.append(datetime.strptime(end, "%Y-%m-%d %H:%M:%S"))
+                    start = start.replace("'", "")
+                    end = end.replace("'", "")
+                    start_fmt = "%Y-%m-%d %H:%M:%S" if " " in start else "%Y-%m-%d"
+                    end_fmt = "%Y-%m-%d %H:%M:%S" if " " in end else "%Y-%m-%d"
+                    self.range.append(datetime.strptime(start, start_fmt))
+                    self.range.append(datetime.strptime(end, end_fmt))
 
             else:
                 raise ValueError("Unknown partition expression format: " + self.expression)
