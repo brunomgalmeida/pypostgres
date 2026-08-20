@@ -4,73 +4,76 @@ A thin psycopg2 wrapper with a PostgreSQL metadata and introspection toolkit.
 
 ## Features
 
-- `connect()` — wraps `psycopg2.connect()` with a dict-style cursor by default, sets a wait callback so Ctrl+C cancels in-flight queries, and registers a dict-to-JSON adapter.
-- `CustomCursor` — dict-style cursor with a `to_csv(fileobj_or_path)` method that streams query results to CSV.
-- `Inspector` — introspects a live database via `information_schema`, `pg_indexes`, and `pg_inherits` into a `PGDatabase` tree of typed dataclasses (`PGSchema` → `PGTable` → `PGColumn` / `PGIndex` / `PGPartition` / `PGForeignKey`). `db.print_all()` pretty-prints the tree.
-- `utils` — helpers such as `get_replication_slot_lag()`, `get_table_list()`, `get_table_schema()`, `exists_table()`, `pg_settings()`, and `create_temporary_table()`.
-- `create_partitions_monthly()` — backfills missing monthly partitions for a parent table.
-
-## Requirements
-
-- Python >= 3.8
-- psycopg2-binary >= 2.9.10
-- A running PostgreSQL server
+- `connect()` — dict-style cursor by default, Ctrl+C cancels in-flight queries, dict→JSON adapter.
+- `CustomCursor` — dict-style cursor with `to_csv()` to stream results to a file or buffer.
+- `Inspector` — introspects a live database into a `PGDatabase` tree (`PGSchema` → `PGTable` → `PGColumn`/`PGIndex`/`PGPartition`), including partitioned tables.
+- `PGUtils` — table listing, schema inspection, existence checks, settings, foreign keys, temporary tables.
+- `create_partitions_monthly()` — backfill missing monthly partitions.
 
 ## Install
 
+### Install for Local development
 ```sh
 uv sync
-uv pip install -e .[dev]
+uv pip install -e .
 ```
 
-## Quick usage
+### Install from GitHub
+
+Install directly from a Git tag (no PyPI upload needed):
+
+```sh
+pip install "git+https://github.com/brunomgalmeida/pypostgres.git@v0.0.1"
+# or with uv
+uv add "git+https://github.com/brunomgalmeida/pypostgres.git@v0.0.1"
+```
+
+## Usage
 
 ```python
 import pypostgres as pg
 
+# Connect (dict-style cursor by default)
 conn = pg.connect("host=localhost dbname=mydb user=myuser")
 cur = conn.cursor()
 
+# Query with dict-style access
 cur.execute("SELECT * FROM users WHERE active = %s", (True,))
-row = cur.fetchone()
-print(row["name"])  # dict-style access
+for row in cur.fetchall():
+    print(row["name"], row["created_at"])
 
+# Export to CSV
 cur.execute("SELECT * FROM users")
-cur.to_csv("users.csv")
-
-inspector = pg.Inspector(conn).inspect()
-inspector.print_all()
+cur.to_csv("users.csv")          # to a file
+csv_text = cur.to_csv()          # or to a StringIO buffer
 ```
 
-## How the Inspector works
-
-`Inspector.inspect()` builds an in-memory `PGDatabase` tree in three catalog passes, using psycopg2 `DictCursor` rows that map directly onto the dataclasses:
-
-1. **Columns** — reads `information_schema.columns` and creates a `PGTable` per `(schema, table)`, appending a `PGColumn` for each column.
-2. **Indexes** — reads `pg_indexes` and attaches a `PGIndex` to each table.
-3. **Partitions** — reads `pg_inherits` + `pg_get_expr(relpartbound)` to link declarative partition children to their parent. Each partition's bound expression is parsed into a `PGPartition` supporting:
-   - Range: `FOR VALUES FROM (...) TO (...)` (single-column, multi-column, naive and timezone-aware datetimes)
-   - List: `FOR VALUES IN (...)`
-   - Hash: `FOR VALUES WITH (MODULUS n, REMAINDER r)`
-   - Default: `DEFAULT`
-   - Empty expression = inheritance-based child (skipped with a warning, since these have no partition bound)
-
-The result is navigable and printable:
+### Inspector — introspect the database
 
 ```python
 db = pg.Inspector(conn).inspect()
-db.print_all(show_columns=False, show_partitions=False, show_children=False, show_indexes=False)
+db.print_all()                                   # pretty-print the tree
 for schema in db.schemas:
     for table in schema.pgtable:
         print(table.name, table.indexes, table.partition)
 ```
 
+### PGUtils — schema helpers
+
+```python
+utils = pg.utils(conn.cursor())
+tables = utils.get_table_list(schema_name="public")
+schema = utils.get_table_schema("users", schema_name="public")  # full column types, e.g. varchar(10)
+utils.exists_table("users")
+utils.get_foreign_keys("orders")
+utils.pg_settings("server_version")
+```
+
+
 ## Tests
 
-Integration tests require a running PostgreSQL instance. Run them with:
-
 ```sh
-uv add --dev pytest
-uv pip install -e .[dev]
-uv run pytest -rP
+uv run pytest
 ```
+
+Integration tests need a running PostgreSQL instance (see `Makefile` → `make tests`).
