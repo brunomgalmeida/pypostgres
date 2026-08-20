@@ -2,3 +2,4 @@ src/pypostgres.egg-info/
 .vibepod/
 .project-wiki/
 .opencode/
+__pycache__/
