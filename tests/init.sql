@@ -219,3 +219,22 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER insert_logs_trigger
     BEFORE INSERT ON logs
     FOR EACH ROW EXECUTE FUNCTION logs_insert_trigger();
+
+-- =============================================================================
+-- Seed data (for README example output)
+-- =============================================================================
+
+INSERT INTO customers (id, name, email) VALUES
+    (1, 'Alice',   'alice@example.com'),
+    (2, 'Bob',     'bob@example.com'),
+    (3, 'Charlie', 'charlie@example.com');
+
+INSERT INTO products (id, name, price) VALUES
+    (1, 'Widget',  9.99),
+    (2, 'Gadget', 24.50),
+    (3, 'Doohickey', 3.75);
+
+INSERT INTO orders (id, customer_id, product_id, quantity, total) VALUES
+    (1, 1, 1, 2, 19.98),
+    (2, 2, 2, 1, 24.50),
+    (3, 3, 3, 5, 18.75);
