@@ -66,8 +66,6 @@ class TSHypertable:
     num_dimensions: int | None
     num_chunks: int | None
     compression_enabled: bool | None
-    is_distributed: bool | None
-    replication_factor: int | None
     total_size: str | None
     total_bytes: int | None
 
@@ -118,8 +116,6 @@ class TimescaleDB:
                    h.num_dimensions,
                    h.num_chunks,
                    h.compression_enabled,
-                   h.is_distributed,
-                   h.replication_factor,
                    pg_size_pretty(
                      hypertable_size(format('%I.%I', h.hypertable_schema, h.hypertable_name)::regclass)
                    ) AS total_size,
@@ -144,3 +140,111 @@ class TimescaleDB:
             """
         )
         return self._map(TSChunk)
+
+    def get_jobs(self) -> list[TSJob]:
+        """All jobs with last-run statistics (timescaledb_information.jobs)."""
+        self.cur.execute(
+            """
+            SELECT j.job_id,
+                   j.application_name,
+                   j.proc_schema,
+                   j.proc_name,
+                   j.hypertable_schema,
+                   j.hypertable_name,
+                   j.schedule_interval,
+                   j.scheduled,
+                   j.fixed_schedule,
+                   s.last_run_status,
+                   s.last_run_started_at AS last_start,
+                   s.last_successful_finish,
+                   s.next_start,
+                   s.last_run_duration,
+                   s.total_runs,
+                   s.total_successes,
+                   s.total_failures
+            FROM timescaledb_information.jobs j
+            LEFT JOIN timescaledb_information.job_stats s USING (job_id)
+            ORDER BY j.job_id
+            """
+        )
+        return self._map(TSJob)
+
+    def get_failed_jobs(self) -> list[TSJob]:
+        """Jobs whose last run failed or accumulated failures (timescaledb_information.jobs)."""
+        self.cur.execute(
+            """
+            SELECT j.job_id,
+                   j.application_name,
+                   j.proc_schema,
+                   j.proc_name,
+                   j.hypertable_schema,
+                   j.hypertable_name,
+                   j.schedule_interval,
+                   j.scheduled,
+                   j.fixed_schedule,
+                   s.last_run_status,
+                   s.last_run_started_at AS last_start,
+                   s.last_successful_finish,
+                   s.next_start,
+                   s.last_run_duration,
+                   s.total_runs,
+                   s.total_successes,
+                   s.total_failures
+            FROM timescaledb_information.jobs j
+            JOIN timescaledb_information.job_stats s USING (job_id)
+            WHERE s.last_run_status = 'failed'
+               OR s.total_failures > 0
+            ORDER BY s.total_failures DESC, s.last_run_started_at DESC
+            """
+        )
+        return self._map(TSJob)
+
+    def get_long_running_jobs(self) -> list[TSJob]:
+        """Jobs whose last run took longer than their schedule interval."""
+        self.cur.execute(
+            """
+            SELECT j.job_id,
+                   j.application_name,
+                   j.proc_schema,
+                   j.proc_name,
+                   j.hypertable_schema,
+                   j.hypertable_name,
+                   j.schedule_interval,
+                   j.scheduled,
+                   j.fixed_schedule,
+                   s.last_run_status,
+                   s.last_run_started_at AS last_start,
+                   s.last_successful_finish,
+                   s.next_start,
+                   s.last_run_duration,
+                   s.total_runs,
+                   s.total_successes,
+                   s.total_failures
+            FROM timescaledb_information.jobs j
+            JOIN timescaledb_information.job_stats s USING (job_id)
+            WHERE s.last_run_duration > j.schedule_interval
+            ORDER BY s.last_run_duration DESC
+            """
+        )
+        return self._map(TSJob)
+
+    def get_job_errors(self, limit: int = 50) -> list[TSJobError]:
+        """Recent job errors (timescaledb_information.job_errors; needs a recent TimescaleDB —
+        on servers without the view the raw psycopg2 error is raised, nothing is guarded)."""
+        self.cur.execute(
+            """
+            SELECT job_id,
+                   proc_schema,
+                   proc_name,
+                   pid,
+                   start_time,
+                   finish_time,
+                   sqlerrcode,
+                   err_message
+            FROM timescaledb_information.job_errors
+            ORDER BY finish_time DESC
+            LIMIT %s
+            """,
+            (limit,),
+        )
+        return self._map(TSJobError)

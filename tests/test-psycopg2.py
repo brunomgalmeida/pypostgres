@@ -300,7 +300,7 @@ def test_timescale_absent_fails_loudly():
 def test_timescale_hypertables_and_chunks():
     _require_timescale()
     from pypostgres.timescale import TimescaleDB
-    conn = _getconnection()
+    conn = pypostgres.connect(**connection_details)  # own connection: drop+recreate of the same table name poisons a shared session's relcache
     cur = conn.cursor()
     try:
         cur.execute("CREATE EXTENSION IF NOT EXISTS timescaledb")
@@ -327,3 +327,43 @@ def test_timescale_hypertables_and_chunks():
         conn.rollback()
         cur.execute("DROP TABLE IF EXISTS ts_ts_metrics")
         conn.commit()
+        conn.close()
+
+
+def test_timescale_jobs_seeded():
+    _require_timescale()
+    from datetime import timedelta
+
+    from pypostgres.timescale import TSJob, TimescaleDB
+    conn = pypostgres.connect(**connection_details)
+    cur = conn.cursor()
+    try:
+        cur.execute("CREATE EXTENSION IF NOT EXISTS timescaledb")
+        cur.execute(
+            "CREATE TABLE ts_ts_metrics (time timestamptz NOT NULL, value float8)"
+        )
+        cur.execute(
+            "SELECT create_hypertable('ts_ts_metrics', 'time', migrate_data => true)"
+        )
+        cur.execute(
+            "INSERT INTO ts_ts_metrics SELECT generate_series('2026-01-01'::timestamptz,"
+            " '2026-03-01'::timestamptz, interval '1 day'), 0.5"
+        )
+        cur.execute("SELECT add_retention_policy('ts_ts_metrics', INTERVAL '1 day')")
+        conn.commit()
+
+        ts = TimescaleDB(conn.cursor())
+        jobs = ts.get_jobs()
+        assert jobs and any(j.hypertable_name == "ts_ts_metrics" for j in jobs)
+        assert isinstance(jobs[0].schedule_interval, timedelta)
+        failed = ts.get_failed_jobs()
+        assert all(isinstance(j, TSJob) for j in failed)
+        errs = ts.get_job_errors(limit=1)
+        assert len(errs) <= 1
+        for j in ts.get_long_running_jobs():
+            assert j.last_run_duration > j.schedule_interval
+    finally:
+        conn.rollback()
+        cur.execute("DROP TABLE IF EXISTS ts_ts_metrics")
+        conn.commit()
+        conn.close()

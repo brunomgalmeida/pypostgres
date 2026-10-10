@@ -47,8 +47,7 @@ def test_tsjoberror_creation_and_validation():
 def _tshypertable(**over):
     base = dict(hypertable_schema="public", hypertable_name="metrics",
                 owner="postgres", num_dimensions=2, num_chunks=4,
-                compression_enabled=True, is_distributed=False,
-                replication_factor=None, total_size="4096 bytes",
+                compression_enabled=True, total_size="4096 bytes",
                 total_bytes=4096)
     return TSHypertable(**{**base, **over})
 
@@ -100,8 +99,7 @@ class _FakeCursor:
 def test_get_hypertables_maps_rows():
     rows = [dict(hypertable_schema="public", hypertable_name="metrics",
                  owner="postgres", num_dimensions=2, num_chunks=4,
-                 compression_enabled=True, is_distributed=False,
-                 replication_factor=None, total_size="4096 bytes",
+                 compression_enabled=True, total_size="4096 bytes",
                  total_bytes=4096)]
     result = TimescaleDB(_FakeCursor(rows)).get_hypertables()
     assert result == [TSHypertable(**rows[0])]
