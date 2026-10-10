@@ -3,7 +3,7 @@ from logging import getLogger
 import psycopg2
 import psycopg2.extras
 
-from .models import PGColumn, PGDatabase, PGIndex, PGPartition, PGSchema, PGTable
+from .models import PGColumn, PGDatabase, PGExtension, PGIndex, PGPartition, PGSchema, PGTable
 
 logger = getLogger(__name__)
 
@@ -153,6 +153,11 @@ class Inspector:
 
             # Add the table to the schema's pgtable list
             schema.pgtable.append(pgtable)
+
+        # == Installed extensions
+        cur.execute("SELECT extname, extversion FROM pg_extension ORDER BY 1")
+        for extname, extversion in cur.fetchall():
+            db.extensions.append(PGExtension(name=extname, version=extversion))
 
         return db
 

@@ -10,7 +10,7 @@ from psycopg2 import OperationalError
 from psycopg2._psycopg import connection, cursor
 
 from .inspector import Inspector
-from .models import PGColumn, PGDatabase, PGForeignKey, PGIndex, PGPartition, PGSchema, PGTable
+from .models import PGColumn, PGDatabase, PGExtension, PGForeignKey, PGIndex, PGPartition, PGSchema, PGTable
 from .PGCustomCursor import CustomCursor
 from .pgutils import PGUtils as utils
 

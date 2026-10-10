@@ -261,3 +261,12 @@ def test_inspect_returns_schemas():
     db = inspector.inspect()
     schema_names = [s.name for s in db.schemas]
     assert "public" in schema_names or "pg_catalog" in schema_names
+
+
+def test_inspect_extensions():
+    conn = _getconnection()
+    inspector = pypostgres.Inspector(conn)
+    db = inspector.inspect()
+    plpgsql = next((e for e in db.extensions if e.name == "plpgsql"), None)
+    assert plpgsql is not None
+    assert plpgsql.version

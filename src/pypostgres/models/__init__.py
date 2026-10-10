@@ -269,6 +269,26 @@ class PGSchema(Base):
 
 
 @dataclass
+class PGExtension(Base):
+    """
+    Represents an installed PostgreSQL extension.
+
+    Attributes:
+        name (str): The name of the extension.
+        version (str): The installed version of the extension.
+    """
+
+    name: str
+    version: str
+
+    def __post_init__(self):
+        if not self.name:
+            raise ValueError("Extension name cannot be empty")
+        if not self.version:
+            raise ValueError("Extension version cannot be empty")
+
+
+@dataclass
 class PGDatabase(Base):
     """
     Represents a PostgreSQL database.
@@ -281,6 +301,7 @@ class PGDatabase(Base):
     schemas: List[PGSchema] = field(default_factory=list)
     tables: dict[tuple[str, str], PGTable] = field(default_factory=dict)  # Dictionary to hold tables for quick access
     indexes: dict[tuple[str, str], PGIndex] = field(default_factory=dict)  # Dictionary to hold indexes for quick access
+    extensions: List[PGExtension] = field(default_factory=list)  # List of installed extensions
 
     def __post_init__(self) -> None:
         if not self.name:

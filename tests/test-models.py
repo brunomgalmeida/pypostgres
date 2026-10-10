@@ -5,6 +5,7 @@ import pytest
 from pypostgres.models import (
     PGColumn,
     PGDatabase,
+    PGExtension,
     PGForeignKey,
     PGIndex,
     PGPartition,
@@ -44,6 +45,24 @@ def test_pgindex_empty_name_raises():
 def test_pgindex_empty_definition_raises():
     with pytest.raises(ValueError, match="Index definition cannot be empty"):
         PGIndex(name="idx", definition="")
+
+
+# == PGExtension ==
+
+def test_pgextension_creation():
+    ext = PGExtension(name="plpgsql", version="1.6")
+    assert ext.name == "plpgsql"
+    assert ext.version == "1.6"
+
+
+def test_pgextension_empty_name_raises():
+    with pytest.raises(ValueError, match="Extension name cannot be empty"):
+        PGExtension(name="", version="1.6")
+
+
+def test_pgextension_empty_version_raises():
+    with pytest.raises(ValueError, match="Extension version cannot be empty"):
+        PGExtension(name="plpgsql", version="")
 
 
 # == PGTable ==
@@ -283,6 +302,11 @@ def test_pgdatabase_creation():
     assert db.schemas == []
     assert db.tables == {}
     assert db.indexes == {}
+
+
+def test_pgdatabase_extensions_defaults_empty():
+    db = PGDatabase(name="testdb")
+    assert db.extensions == []
 
 
 def test_pgdatabase_empty_name_raises():

@@ -62,6 +62,9 @@ id,name,price
 ```python
 db = pg.Inspector(conn).inspect()
 
+# Installed extensions as (name, version) pairs, e.g. plpgsql 1.0
+print(db.extensions)
+
 # Print a summary of each top-level table
 for schema in db.schemas:
     for table in schema.pgtable:
