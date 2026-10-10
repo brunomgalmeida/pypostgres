@@ -5,8 +5,6 @@ from datetime import datetime
 from datetime import timedelta as datetime_timedelta
 from typing import List
 
-__version__ = "0.0.1"
-
 
 # @dataclass
 class Base:
