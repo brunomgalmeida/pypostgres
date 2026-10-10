@@ -49,5 +49,9 @@ build-backend = "hatchling.build"
 [tool.hatch.version]
 source = "vcs"
 
+# dirty trees and post-tag commits report the tag itself (0.0.2.dev1) instead of guessing the next minor
+[tool.hatch.version.raw-options]
+version_scheme = "no-guess-dev"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/pypostgres"]
