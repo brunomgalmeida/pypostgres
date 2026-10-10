@@ -8,6 +8,25 @@ timescaledb extension installed.
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+# Column list shared by every TSJob-returning query; keep in sync with TSJob fields.
+_JOB_COLUMNS = """j.job_id,
+       j.application_name,
+       j.proc_schema,
+       j.proc_name,
+       j.hypertable_schema,
+       j.hypertable_name,
+       j.schedule_interval,
+       j.scheduled,
+       j.fixed_schedule,
+       s.last_run_status,
+       s.last_run_started_at AS last_start,
+       s.last_successful_finish,
+       s.next_start,
+       s.last_run_duration,
+       s.total_runs,
+       s.total_successes,
+       s.total_failures"""
+
 
 @dataclass
 class TSJob:
@@ -84,8 +103,8 @@ class TSChunk:
     hypertable_name: str
     chunk_schema: str
     chunk_name: str
-    range_start: datetime
-    range_end: datetime
+    range_start: datetime | None  # NULL for space-partitioned dimensions
+    range_end: datetime | None
     is_compressed: bool | None
 
     def __post_init__(self) -> None:
@@ -107,7 +126,8 @@ class TimescaleDB:
         return [model(**dict(row)) for row in self.cur.fetchall()]
 
     def get_hypertables(self) -> list[TSHypertable]:
-        """All hypertables with size and chunk counts (timescaledb_information.hypertables)."""
+        """All hypertables with size and chunk counts (timescaledb_information.hypertables).
+        Single-node/local hypertables; hypertable_size() is unreliable on multi-node."""
         self.cur.execute(
             """
             SELECT h.hypertable_schema,
@@ -127,15 +147,18 @@ class TimescaleDB:
         return self._map(TSHypertable)
 
     def get_chunks(self) -> list[TSChunk]:
-        """Individual chunks, most recent first (timescaledb_information.chunks)."""
+        """The 50 most recent chunks across all hypertables (timescaledb_information.chunks)."""
         self.cur.execute(
             """
-            SELECT c.hypertable_schema, c.hypertable_name,
-                   c.chunk_schema, c.chunk_name,
-                   c.range_start, c.range_end,
+            SELECT c.hypertable_schema,
+                   c.hypertable_name,
+                   c.chunk_schema,
+                   c.chunk_name,
+                   c.range_start,
+                   c.range_end,
                    c.is_compressed
             FROM timescaledb_information.chunks c
-            ORDER BY c.hypertable_schema, c.hypertable_name, c.range_start DESC
+            ORDER BY c.range_start DESC NULLS LAST, c.hypertable_schema, c.hypertable_name
             LIMIT 50
             """
         )
@@ -144,24 +167,8 @@ class TimescaleDB:
     def get_jobs(self) -> list[TSJob]:
         """All jobs with last-run statistics (timescaledb_information.jobs)."""
         self.cur.execute(
-            """
-            SELECT j.job_id,
-                   j.application_name,
-                   j.proc_schema,
-                   j.proc_name,
-                   j.hypertable_schema,
-                   j.hypertable_name,
-                   j.schedule_interval,
-                   j.scheduled,
-                   j.fixed_schedule,
-                   s.last_run_status,
-                   s.last_run_started_at AS last_start,
-                   s.last_successful_finish,
-                   s.next_start,
-                   s.last_run_duration,
-                   s.total_runs,
-                   s.total_successes,
-                   s.total_failures
+            f"""
+            SELECT {_JOB_COLUMNS}
             FROM timescaledb_information.jobs j
             LEFT JOIN timescaledb_information.job_stats s USING (job_id)
             ORDER BY j.job_id
@@ -172,24 +179,8 @@ class TimescaleDB:
     def get_failed_jobs(self) -> list[TSJob]:
         """Jobs whose last run failed or accumulated failures (timescaledb_information.jobs)."""
         self.cur.execute(
-            """
-            SELECT j.job_id,
-                   j.application_name,
-                   j.proc_schema,
-                   j.proc_name,
-                   j.hypertable_schema,
-                   j.hypertable_name,
-                   j.schedule_interval,
-                   j.scheduled,
-                   j.fixed_schedule,
-                   s.last_run_status,
-                   s.last_run_started_at AS last_start,
-                   s.last_successful_finish,
-                   s.next_start,
-                   s.last_run_duration,
-                   s.total_runs,
-                   s.total_successes,
-                   s.total_failures
+            f"""
+            SELECT {_JOB_COLUMNS}
             FROM timescaledb_information.jobs j
             JOIN timescaledb_information.job_stats s USING (job_id)
             WHERE s.last_run_status = 'failed'
@@ -202,24 +193,8 @@ class TimescaleDB:
     def get_long_running_jobs(self) -> list[TSJob]:
         """Jobs whose last run took longer than their schedule interval."""
         self.cur.execute(
-            """
-            SELECT j.job_id,
-                   j.application_name,
-                   j.proc_schema,
-                   j.proc_name,
-                   j.hypertable_schema,
-                   j.hypertable_name,
-                   j.schedule_interval,
-                   j.scheduled,
-                   j.fixed_schedule,
-                   s.last_run_status,
-                   s.last_run_started_at AS last_start,
-                   s.last_successful_finish,
-                   s.next_start,
-                   s.last_run_duration,
-                   s.total_runs,
-                   s.total_successes,
-                   s.total_failures
+            f"""
+            SELECT {_JOB_COLUMNS}
             FROM timescaledb_information.jobs j
             JOIN timescaledb_information.job_stats s USING (job_id)
             WHERE s.last_run_duration > j.schedule_interval
@@ -231,6 +206,8 @@ class TimescaleDB:
     def get_job_errors(self, limit: int = 50) -> list[TSJobError]:
         """Recent job errors (timescaledb_information.job_errors; needs a recent TimescaleDB —
         on servers without the view the raw psycopg2 error is raised, nothing is guarded)."""
+        if limit < 1:
+            raise ValueError("limit must be at least 1")
         self.cur.execute(
             """
             SELECT job_id,

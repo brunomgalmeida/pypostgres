@@ -9,6 +9,7 @@ import pytest
 
 import pypostgres
 from pypostgres.pgutils import PGUtils
+from pypostgres.timescale import TSJob, TimescaleDB
 
 logging.basicConfig(
     format="%(asctime)s.%(msecs)03d: (%(name)s) %(lineno)d %(levelname)s: %(message)s",
@@ -277,9 +278,9 @@ def test_inspect_extensions():
 # == TimescaleDB ==
 
 def _timescale_available():
-    cur = _getconnection().cursor()
-    cur.execute("SELECT 1 FROM pg_available_extensions WHERE name = 'timescaledb'")
-    return cur.fetchone() is not None
+    with _getconnection().cursor() as cur:
+        cur.execute("SELECT 1 FROM pg_available_extensions WHERE name = 'timescaledb'")
+        return cur.fetchone() is not None
 
 
 def _require_timescale():
@@ -290,7 +291,6 @@ def _require_timescale():
 def test_timescale_absent_fails_loudly():
     if _timescale_available():
         pytest.skip("timescaledb present; absence behavior not testable here")
-    from pypostgres.timescale import TimescaleDB
     conn = _getconnection()
     with pytest.raises(psycopg2.Error):
         TimescaleDB(conn.cursor()).get_hypertables()
@@ -299,7 +299,6 @@ def test_timescale_absent_fails_loudly():
 
 def test_timescale_hypertables_and_chunks():
     _require_timescale()
-    from pypostgres.timescale import TimescaleDB
     conn = pypostgres.connect(**connection_details)  # own connection: drop+recreate of the same table name poisons a shared session's relcache
     cur = conn.cursor()
     try:
@@ -334,7 +333,6 @@ def test_timescale_jobs_seeded():
     _require_timescale()
     from datetime import timedelta
 
-    from pypostgres.timescale import TSJob, TimescaleDB
     conn = pypostgres.connect(**connection_details)
     cur = conn.cursor()
     try:

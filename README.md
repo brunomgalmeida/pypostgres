@@ -9,6 +9,7 @@ A thin psycopg2 wrapper with a PostgreSQL metadata and introspection toolkit.
 - `Inspector` — introspects a live database into a `PGDatabase` tree (`PGSchema` → `PGTable` → `PGColumn`/`PGIndex`/`PGPartition`), including partitioned tables.
 - `PGUtils` — table listing, schema inspection, existence checks, settings, foreign keys, temporary tables.
 - `create_partitions_monthly()` — backfill missing monthly partitions.
+- `TimescaleDB` (optional `pypostgres[timescale]` extra) — jobs, hypertables and chunks from `timescaledb_information`.
 
 ## Install
 

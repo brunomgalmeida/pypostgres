@@ -5,6 +5,8 @@ import pytest
 from pypostgres.timescale import TSJob, TSJobError, TSHypertable, TSChunk, TimescaleDB
 
 
+# == TSJob ==
+
 def _tsjob(**over):
     base = dict(job_id=1, application_name="Retention Policy JS Proc",
                 proc_schema="public", proc_name="policy_retention",
@@ -33,6 +35,8 @@ def test_tsjob_empty_proc_name_raises():
         _tsjob(proc_name="")
 
 
+# == TSJobError ==
+
 def test_tsjoberror_creation_and_validation():
     err = TSJobError(job_id=1, proc_schema="public", proc_name="p",
                      pid=123, start_time=None, finish_time=None,
@@ -43,6 +47,8 @@ def test_tsjoberror_creation_and_validation():
                    start_time=None, finish_time=None, sqlerrcode=None,
                    err_message="boom")
 
+
+# == TSHypertable ==
 
 def _tshypertable(**over):
     base = dict(hypertable_schema="public", hypertable_name="metrics",
@@ -60,6 +66,8 @@ def test_tshypertable_creation_and_validation():
     with pytest.raises(ValueError, match="Hypertable schema cannot be empty"):
         _tshypertable(hypertable_schema="")
 
+
+# == TSChunk ==
 
 def test_tschunk_creation_and_validation():
     ch = TSChunk(hypertable_schema="public", hypertable_name="metrics",
@@ -79,6 +87,8 @@ def test_tschunk_creation_and_validation():
                 range_start=datetime(2026, 1, 1),
                 range_end=datetime(2026, 2, 1), is_compressed=False)
 
+
+# == TimescaleDB ==
 
 def test_timescaledb_requires_cursor():
     with pytest.raises(ValueError, match="Database cursor cannot be None"):
@@ -103,3 +113,8 @@ def test_get_hypertables_maps_rows():
                  total_bytes=4096)]
     result = TimescaleDB(_FakeCursor(rows)).get_hypertables()
     assert result == [TSHypertable(**rows[0])]
+
+
+def test_get_job_errors_rejects_nonpositive_limit():
+    with pytest.raises(ValueError, match="limit must be at least 1"):
+        TimescaleDB(_FakeCursor([])).get_job_errors(limit=0)
