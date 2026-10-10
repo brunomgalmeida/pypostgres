@@ -3,3 +3,4 @@ src/pypostgres.egg-info/
 .project-wiki/
 .opencode/
 __pycache__/
+uv.lock
