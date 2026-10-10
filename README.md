@@ -124,6 +124,29 @@ orders -> customers
 16.15 (Debian 16.15-1.pgdg13+2)
 ```
 
+### TimescaleDB — jobs, hypertables and chunks
+
+Optional extra, installed with `pip install "pypostgres[timescale]"` (or `uv add "pypostgres[timescale]"`). Only works against a database with the timescaledb extension installed; on plain PostgreSQL the raw psycopg2 error is raised.
+
+```python
+from pypostgres.timescale import TimescaleDB
+
+ts = TimescaleDB(conn.cursor())
+
+for job in ts.get_jobs():
+    print(job.hypertable_name, job.last_run_status, job.total_failures)
+
+for failed in ts.get_failed_jobs():
+    print(failed.proc_name, failed.last_run_duration)
+
+for ht in ts.get_hypertables():
+    print(ht.hypertable_name, ht.num_chunks, ht.total_size)
+
+print(len(ts.get_chunks()), "chunks (most recent 50)")
+```
+
+Written and verified against TimescaleDB 2.30: `is_distributed`/`replication_factor` are absent from newer `timescaledb_information.hypertables` and are not exposed.
+
 ## Tools
 
 Standalone command-line tools built on top of the library live in [`bin/`](./bin/).
