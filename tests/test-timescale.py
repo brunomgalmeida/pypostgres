@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from pypostgres.timescale import TSJob, TSJobError, TSHypertable, TSChunk
+from pypostgres.timescale import TSJob, TSJobError, TSHypertable, TSChunk, TimescaleDB
 
 
 def _tsjob(**over):
@@ -79,3 +79,29 @@ def test_tschunk_creation_and_validation():
                 chunk_schema="", chunk_name="c",
                 range_start=datetime(2026, 1, 1),
                 range_end=datetime(2026, 2, 1), is_compressed=False)
+
+
+def test_timescaledb_requires_cursor():
+    with pytest.raises(ValueError, match="Database cursor cannot be None"):
+        TimescaleDB(None)
+
+
+class _FakeCursor:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def execute(self, *a, **k):
+        pass
+
+    def fetchall(self):
+        return self._rows
+
+
+def test_get_hypertables_maps_rows():
+    rows = [dict(hypertable_schema="public", hypertable_name="metrics",
+                 owner="postgres", num_dimensions=2, num_chunks=4,
+                 compression_enabled=True, is_distributed=False,
+                 replication_factor=None, total_size="4096 bytes",
+                 total_bytes=4096)]
+    result = TimescaleDB(_FakeCursor(rows)).get_hypertables()
+    assert result == [TSHypertable(**rows[0])]

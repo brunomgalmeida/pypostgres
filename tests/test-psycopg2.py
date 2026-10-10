@@ -5,6 +5,8 @@ import os
 import psycopg2
 import psycopg2.extras
 
+import pytest
+
 import pypostgres
 from pypostgres.pgutils import PGUtils
 
@@ -270,3 +272,58 @@ def test_inspect_extensions():
     plpgsql = next((e for e in db.extensions if e.name == "plpgsql"), None)
     assert plpgsql is not None
     assert plpgsql.version
+
+
+# == TimescaleDB ==
+
+def _timescale_available():
+    cur = _getconnection().cursor()
+    cur.execute("SELECT 1 FROM pg_available_extensions WHERE name = 'timescaledb'")
+    return cur.fetchone() is not None
+
+
+def _require_timescale():
+    if not _timescale_available():
+        pytest.skip("timescaledb extension not available")
+
+
+def test_timescale_absent_fails_loudly():
+    if _timescale_available():
+        pytest.skip("timescaledb present; absence behavior not testable here")
+    from pypostgres.timescale import TimescaleDB
+    conn = _getconnection()
+    with pytest.raises(psycopg2.Error):
+        TimescaleDB(conn.cursor()).get_hypertables()
+    conn.rollback()  # the expected error aborted the shared transaction
+
+
+def test_timescale_hypertables_and_chunks():
+    _require_timescale()
+    from pypostgres.timescale import TimescaleDB
+    conn = _getconnection()
+    cur = conn.cursor()
+    try:
+        cur.execute("CREATE EXTENSION IF NOT EXISTS timescaledb")
+        cur.execute(
+            "CREATE TABLE ts_ts_metrics (time timestamptz NOT NULL, value float8)"
+        )
+        cur.execute(
+            "SELECT create_hypertable('ts_ts_metrics', 'time', migrate_data => true)"
+        )
+        cur.execute(
+            "INSERT INTO ts_ts_metrics SELECT generate_series('2026-01-01'::timestamptz,"
+            " '2026-03-01'::timestamptz, interval '1 day'), 0.5"
+        )
+        conn.commit()
+
+        ts = TimescaleDB(conn.cursor())
+        hts = ts.get_hypertables()
+        match = [h for h in hts if h.hypertable_name == "ts_ts_metrics"]
+        assert match, "seeded hypertable missing from get_hypertables()"
+        assert match[0].num_chunks >= 1
+        chunks = ts.get_chunks()
+        assert chunks and all(c.chunk_name for c in chunks)
+    finally:
+        conn.rollback()
+        cur.execute("DROP TABLE IF EXISTS ts_ts_metrics")
+        conn.commit()

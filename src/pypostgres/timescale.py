@@ -95,3 +95,52 @@ class TSChunk:
             raise ValueError("Chunk schema cannot be empty")
         if not self.chunk_name:
             raise ValueError("Chunk name cannot be empty")
+
+
+class TimescaleDB:
+    """Read-only facade over TimescaleDB informational views (mirrors PGUtils)."""
+
+    def __init__(self, cur):
+        if not cur:
+            raise ValueError("Database cursor cannot be None")
+        self.cur = cur
+
+    def _map(self, model: type) -> list:
+        return [model(**dict(row)) for row in self.cur.fetchall()]
+
+    def get_hypertables(self) -> list[TSHypertable]:
+        """All hypertables with size and chunk counts (timescaledb_information.hypertables)."""
+        self.cur.execute(
+            """
+            SELECT h.hypertable_schema,
+                   h.hypertable_name,
+                   h.owner,
+                   h.num_dimensions,
+                   h.num_chunks,
+                   h.compression_enabled,
+                   h.is_distributed,
+                   h.replication_factor,
+                   pg_size_pretty(
+                     hypertable_size(format('%I.%I', h.hypertable_schema, h.hypertable_name)::regclass)
+                   ) AS total_size,
+                   hypertable_size(format('%I.%I', h.hypertable_schema, h.hypertable_name)::regclass) AS total_bytes
+            FROM timescaledb_information.hypertables h
+            ORDER BY total_bytes DESC
+            """
+        )
+        return self._map(TSHypertable)
+
+    def get_chunks(self) -> list[TSChunk]:
+        """Individual chunks, most recent first (timescaledb_information.chunks)."""
+        self.cur.execute(
+            """
+            SELECT c.hypertable_schema, c.hypertable_name,
+                   c.chunk_schema, c.chunk_name,
+                   c.range_start, c.range_end,
+                   c.is_compressed
+            FROM timescaledb_information.chunks c
+            ORDER BY c.hypertable_schema, c.hypertable_name, c.range_start DESC
+            LIMIT 50
+            """
+        )
+        return self._map(TSChunk)
