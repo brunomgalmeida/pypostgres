@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from pypostgres.timescale import TSJob, TSJobError
+from pypostgres.timescale import TSJob, TSJobError, TSHypertable, TSChunk
 
 
 def _tsjob(**over):
@@ -42,3 +42,40 @@ def test_tsjoberror_creation_and_validation():
         TSJobError(job_id=0, proc_schema=None, proc_name=None, pid=None,
                    start_time=None, finish_time=None, sqlerrcode=None,
                    err_message="boom")
+
+
+def _tshypertable(**over):
+    base = dict(hypertable_schema="public", hypertable_name="metrics",
+                owner="postgres", num_dimensions=2, num_chunks=4,
+                compression_enabled=True, is_distributed=False,
+                replication_factor=None, total_size="4096 bytes",
+                total_bytes=4096)
+    return TSHypertable(**{**base, **over})
+
+
+def test_tshypertable_creation_and_validation():
+    ht = _tshypertable()
+    assert ht.total_bytes == 4096
+    with pytest.raises(ValueError, match="Hypertable name cannot be empty"):
+        _tshypertable(hypertable_name="")
+    with pytest.raises(ValueError, match="Hypertable schema cannot be empty"):
+        _tshypertable(hypertable_schema="")
+
+
+def test_tschunk_creation_and_validation():
+    ch = TSChunk(hypertable_schema="public", hypertable_name="metrics",
+                 chunk_schema="_timescaledb_internal",
+                 chunk_name="_hyper_1_1_chunk",
+                 range_start=datetime(2026, 1, 1),
+                 range_end=datetime(2026, 2, 1), is_compressed=False)
+    assert ch.chunk_name.endswith("chunk")
+    with pytest.raises(ValueError, match="Chunk name cannot be empty"):
+        TSChunk(hypertable_schema="public", hypertable_name="m",
+                chunk_schema="s", chunk_name="",
+                range_start=datetime(2026, 1, 1),
+                range_end=datetime(2026, 2, 1), is_compressed=False)
+    with pytest.raises(ValueError, match="Chunk schema cannot be empty"):
+        TSChunk(hypertable_schema="public", hypertable_name="m",
+                chunk_schema="", chunk_name="c",
+                range_start=datetime(2026, 1, 1),
+                range_end=datetime(2026, 2, 1), is_compressed=False)

@@ -54,3 +54,44 @@ class TSJobError:
     def __post_init__(self) -> None:
         if not self.job_id:
             raise ValueError("Job id cannot be empty")
+
+
+@dataclass
+class TSHypertable:
+    """A hypertable with its dimensions, chunks and size (timescaledb_information.hypertables)."""
+
+    hypertable_schema: str
+    hypertable_name: str
+    owner: str | None
+    num_dimensions: int | None
+    num_chunks: int | None
+    compression_enabled: bool | None
+    is_distributed: bool | None
+    replication_factor: int | None
+    total_size: str | None
+    total_bytes: int | None
+
+    def __post_init__(self) -> None:
+        if not self.hypertable_schema:
+            raise ValueError("Hypertable schema cannot be empty")
+        if not self.hypertable_name:
+            raise ValueError("Hypertable name cannot be empty")
+
+
+@dataclass
+class TSChunk:
+    """One chunk of a hypertable (timescaledb_information.chunks)."""
+
+    hypertable_schema: str
+    hypertable_name: str
+    chunk_schema: str
+    chunk_name: str
+    range_start: datetime
+    range_end: datetime
+    is_compressed: bool | None
+
+    def __post_init__(self) -> None:
+        if not self.chunk_schema:
+            raise ValueError("Chunk schema cannot be empty")
+        if not self.chunk_name:
+            raise ValueError("Chunk name cannot be empty")
