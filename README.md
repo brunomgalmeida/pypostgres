@@ -121,6 +121,21 @@ orders -> customers
 16.15 (Debian 16.15-1.pgdg13+2)
 ```
 
+## Tools
+
+Standalone command-line tools built on top of the library live in [`bin/`](./bin/).
+See [`bin/README.md`](./bin/README.md) for the full list, arguments, and output
+of each tool.
+
+```sh
+# Run a tool directly with uv
+uv run bin/schema-sync.py --help
+
+# Or install the console commands (pypg-schema-sync, ...)
+uv pip install -e .
+pypg-schema-sync --help
+```
+
 ## Tests
 
 ```sh

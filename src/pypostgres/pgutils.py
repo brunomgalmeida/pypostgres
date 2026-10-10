@@ -8,6 +8,23 @@ from .models import PGColumn, PGTable
 logger = getLogger(__name__)
 
 
+def _full_data_type(col: dict) -> str:
+    """Rebuild a full SQL type from information_schema column attributes.
+
+    information_schema.columns.data_type drops type modifiers (e.g. 'character
+    varying' loses the '(10)'). Recombine length / precision / scale so that
+    varchar(10) propagates identically to the source definition.
+    """
+    data_type = col.get("data_type")
+    if data_type in ("character varying", "character") and col.get("character_maximum_length"):
+        return f"{data_type}({col['character_maximum_length']})"
+    if data_type == "numeric" and col.get("numeric_precision") is not None and col.get("numeric_scale") is not None:
+        return f"{data_type}({col['numeric_precision']},{col['numeric_scale']})"
+    if data_type in ("timestamp without time zone", "timestamp with time zone", "time without time zone", "time with time zone") and col.get("datetime_precision") is not None and col["datetime_precision"] > 0:
+        return f"{data_type}({col['datetime_precision']})"
+    return data_type
+
+
 class PGUtils:
     tables: dict[str, PGTable] = {}
 
@@ -37,12 +54,20 @@ class PGUtils:
 
     def get_table_schema(self, table_name, schema_name="public") -> PGTable:
         self.cur.execute(
-            "SELECT ordinal_position, column_name as name, data_type FROM information_schema.columns WHERE table_schema = %s AND table_name = %s  order by ordinal_position",
+            """SELECT ordinal_position, column_name as name, data_type,
+                      character_maximum_length, numeric_precision, numeric_scale, datetime_precision
+               FROM information_schema.columns
+               WHERE table_schema = %s AND table_name = %s
+               ORDER BY ordinal_position""",
             (schema_name, table_name),
         )
         pgcolumns = []
         for k in self.cur.fetchall():
-            pgcolumns.append(PGColumn(**k))
+            col = dict(k)
+            col["data_type"] = _full_data_type(col)
+            for extra in ("character_maximum_length", "numeric_precision", "numeric_scale", "datetime_precision"):
+                col.pop(extra, None)
+            pgcolumns.append(PGColumn(**col))
         self.tables[f"{schema_name}.{table_name}"] = PGTable(name=table_name, schema=schema_name, column=pgcolumns)
         return self.tables[f"{schema_name}.{table_name}"]
 
